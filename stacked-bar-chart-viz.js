@@ -278,7 +278,7 @@ function stackedBarChartViz(option) {
   dummy_text.remove();
 
   var margin_left = margin.left;
-  if (max_y_label_width > 25) {
+  if (max_y_label_width > 20) {
     margin_left = ((max_y_label_width + 35) / 10).toFixed(1) * 10;
   }
 
