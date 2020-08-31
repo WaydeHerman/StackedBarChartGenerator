@@ -39,7 +39,6 @@
      d3.json("sample.json").then(function(data) {
        data.forEach(function(v) {
         v["Value"] = +v["Value"]
-        v["Fake"] = Math.round(v['Value']*10/2)/10
        })
 
         stackedBarChartViz({
@@ -47,8 +46,7 @@
         data,
         columnBars: "State",
         columnGrouping: "Years",
-        columnMeasure0: "Value",
-        columnMeasure1: "Fake",
+        columnMeasure: "Value",
         operationMeasure: "avg",
         paletteFill: "single",
         positionLegend: "top",

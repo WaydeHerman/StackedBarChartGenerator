@@ -142,8 +142,7 @@ function stackedBarChartViz(option) {
   const columnBars = option.columnBars;
   const isGrouped = option.hasOwnProperty("columnGrouping");
   const columnGrouping = option.columnGrouping;
-  const columnMeasure0 = option.columnMeasure0;
-  const columnMeasure1 = option.columnMeasure1;
+  const columnMeasure = option.columnMeasure;
   const operationMeasure = option.operationMeasure || "avg";
   const paletteFill = option.paletteFill || "full";
   const positionLegend = option.positionLegend || "top";
@@ -153,77 +152,27 @@ function stackedBarChartViz(option) {
 
   // Process data
   option.data.forEach((d) => {
-    d[columnMeasure0] = parseFloat(d[columnMeasure0]);
-    d[columnMeasure1] = parseFloat(d[columnMeasure1]);
+    d[columnMeasure] = parseFloat(d[columnMeasure]);
   });
 
-  const allValues = [];
   if (isGrouped) {
     var data_0 = d3
       .nest()
       .key(function (d) {
-        return d[columnGrouping];
-      })
-      .sortKeys(sortBars(sort))
-      .key(function (d) {
         return d[columnBars];
       })
       .sortKeys(sortBars(sort))
-      .rollup(function (v) {
-        const value = aggregate(v, operationMeasure, columnMeasure0);
-        return value;
-      })
-      .entries(option.data);
-
-    var data_1 = d3
-      .nest()
       .key(function (d) {
         return d[columnGrouping];
       })
       .sortKeys(sortBars(sort))
-      .key(function (d) {
-        return d[columnBars];
-      })
-      .sortKeys(sortBars(sort))
       .rollup(function (v) {
-        const value0 = aggregate(v, operationMeasure, columnMeasure0);
-        const value1 = aggregate(v, operationMeasure, columnMeasure1);
-        const value = value0 + value1;
-        allValues.push(value);
+        const value = aggregate(v, operationMeasure, columnMeasure);
         return value;
       })
       .entries(option.data);
   } else {
-    var data_0 = d3
-      .nest()
-      .key(function (d) {
-        return d[columnBars];
-      })
-      .sortKeys(sortBars(sort))
-      .rollup(function (v) {
-        const value = aggregate(v, operationMeasure, columnMeasure0);
-        allValues.push(value);
-        return value;
-      })
-      .entries(option.data);
-
-    var data_1 = d3
-      .nest()
-      .key(function (d) {
-        return d[columnBars];
-      })
-      .sortKeys(sortBars(sort))
-      .rollup(function (v) {
-        const value0 = aggregate(v, operationMeasure, columnMeasure0);
-        const value1 = aggregate(v, operationMeasure, columnMeasure1);
-        const value = value0 + value1;
-        allValues.push(value);
-        return value;
-      })
-      .entries(option.data);
-
-    data_0 = [{ key: "", values: data_0 }];
-    data_1 = [{ key: "", values: data_1 }];
+    // Think I can delete?
   }
 
   const groupKeys = data_0.map(function (d) {
@@ -234,9 +183,13 @@ function stackedBarChartViz(option) {
     return d.key;
   });
 
-  const maxValue = d3.max(allValues);
+  const maxValue = d3.max(data_0, function (v) {
+    return d3.sum(v.values, function (u) {
+      return u.value;
+    });
+  });
 
-  const n = allValues.length;
+  //const n = allValues.length;
 
   bar_height = 20;
   singleSpacing = 10;
@@ -285,10 +238,7 @@ function stackedBarChartViz(option) {
   margin.left = margin_left;
 
   const svg_height =
-    (singleKeys.length * (bar_height + singleSpacing) + groupSpacing) *
-      groupKeys.length +
-    margin.top +
-    groupSpacing;
+    groupKeys.length * (singleSpacing + bar_height) + margin.top;
 
   let legendContainer;
   if (positionLegend === "top") {
@@ -335,8 +285,6 @@ function stackedBarChartViz(option) {
     legendContainer = container.append("div");
   }
 
-  console.log("maxValue", maxValue);
-
   x = d3
     .scaleLinear()
     .domain([0, maxValue])
@@ -346,40 +294,41 @@ function stackedBarChartViz(option) {
   y0 = d3
     .scaleBand()
     .domain(groupKeys)
-    .rangeRound([groupSpacing, svg_height - margin.bottom]);
+    .rangeRound([0, svg_height - margin.bottom]);
 
-  y1 = d3
-    .scaleBand()
-    .domain(singleKeys)
-    .rangeRound([0, y0.bandwidth() - groupSpacing]);
+  render(chartContainer, data_0);
 
-  render(chartContainer, data_0, data_1);
-
-  function render(container, data_0, data_1) {
+  function render(container, data_0) {
     container
       .append("g")
       .selectAll("g")
-      .data(data_1)
+      .data(data_0)
       .join("g")
-      .attr("transform", (d) => `translate(0,${y0(d.key)})`)
+      //.attr("transform", (d) => `translate(0,${y0(d.key)})`)
       .attr("class", "test")
       .selectAll("rect")
       .data(function (d) {
+        var prev_value = 0;
         d.values.forEach(function (v) {
           v.parentKey = d.key;
+          v.prev_value = prev_value;
+          prev_value += v.value;
         });
         return d.values;
       })
       .join("rect")
-      .attr("x", (d) => x(0))
-      .attr("y", (d) => y1(d.key))
+      .attr("x", function (d) {
+        return x(0);
+      })
+      .attr("y", function (d) {
+        return y0(d.parentKey);
+      })
       .attr("width", (d) => 0)
       .attr("height", bar_height)
       .attr("fill", function (d) {
         if (paletteFill === "pattern") {
           return "url(#" + colorScale_1(d.key) + ")";
         } else {
-          //return colorScale(d.key);
           return colorScale_1(d.key);
         }
       })
@@ -394,54 +343,7 @@ function stackedBarChartViz(option) {
       .on("mousemove", moveTooltip)
       .on("mouseout", hideTooltip);
 
-    container
-      .append("g")
-      .selectAll("g")
-      .data(data_0)
-      .join("g")
-      .attr("transform", (d) => `translate(0,${y0(d.key)})`)
-      .attr("class", "test")
-      .selectAll("rect")
-      .data(function (d) {
-        d.values.forEach(function (v) {
-          v.parentKey = d.key;
-        });
-        return d.values;
-      })
-      .join("rect")
-      .attr("x", (d) => x(0))
-      .attr("y", (d) => y1(d.key))
-      .attr("width", (d) => 0)
-      .attr("height", bar_height)
-      .attr("fill", function (d) {
-        if (paletteFill === "pattern") {
-          return "url(#" + colorScale_0(d.key) + ")";
-        } else {
-          return colorScale_0(d.key);
-        }
-      })
-      .attr("class", function () {
-        if (paletteFill === "pattern") {
-          return "pattern-fill-0";
-        }
-      })
-      .attr("id", function (d) {
-        return d.key;
-      })
-      .on("mouseover", function (d) {
-        showTooltip(d, 0);
-      })
-      .on("mousemove", moveTooltip)
-      .on("mouseout", hideTooltip);
-
     container.append("g").attr("class", "y-axis").call(d3.axisLeft(y0));
-
-    /* calc x-ticks:
-    - largest label width
-    - space for each
-    - calc how many ticks can fit
-    - set number of ticks
-      */
 
     var dummy_text = d3
       .select(el)
@@ -472,11 +374,12 @@ function stackedBarChartViz(option) {
       (svg_width - margin.left - margin.right) / groupKeys.length;
 
     container.selectAll(".x-axis-0 text").html(function (d) {
+      var content = d + "";
       var label_width = this.getBoundingClientRect().width;
       if (label_width > x_label_spacing) {
-        var a = d.substr(0, 20).lastIndexOf(" ");
-        var b = d.substr(0, a + 1);
-        var y = d.substr(a + 1);
+        var a = content.substr(0, 20).lastIndexOf(" ");
+        var b = content.substr(0, a + 1);
+        var y = content.substr(a + 1);
         return (
           "<tspan x='0' dy='0.35em'>" +
           b +
@@ -485,13 +388,13 @@ function stackedBarChartViz(option) {
           "</tspan>"
         );
       }
-      return "<tspan x='0' dy='0.35em'>" + d + "</tspan>";
+      return "<tspan x='0' dy='0.35em'>" + content + "</tspan>";
     });
 
     container
       .append("text")
       .attr("transform", function () {
-        var height = svg_height - margin.top - 10;
+        var height = svg_height - margin.top - 0;
         return (
           "translate(" +
           (svg_width - margin.left - margin.right) / 2 +
@@ -525,7 +428,7 @@ function stackedBarChartViz(option) {
         return x(d.value) - x(0);
       })
       .attr("x", function (d) {
-        return x(0);
+        return x(d.prev_value);
       });
 
     chartContainer
@@ -564,40 +467,16 @@ function stackedBarChartViz(option) {
   }
 
   function showTooltip(d, stack) {
-    var value;
-    if (stack == 0) {
-      tooltip
-        .style(
-          "border-color",
-          paletteFill === "pattern" ? "#119eb9" : colorScale_0(d.key)
-        )
-        .transition()
-        .style("opacity", 1);
+    tooltip
+      .style(
+        "border-color",
+        paletteFill === "pattern" ? "#119eb9" : colorScale_1(d.key)
+      )
+      .transition()
+      .style("opacity", 1);
 
-      value = formatNumber(d.value);
-    } else {
-      tooltip
-        .style(
-          "border-color",
-          paletteFill === "pattern" ? "#08415c" : colorScale_1(d.key)
-        )
-        .transition()
-        .style("opacity", 1);
+    value = formatNumber(d.value);
 
-      var value_1 = d.value;
-      var value_0;
-      data_0.forEach(function (v) {
-        if (v.key == d.parentKey) {
-          v.values.forEach(function (w) {
-            if (w.key == d.key) {
-              value_0 = w.value;
-            }
-          });
-        }
-      });
-
-      value = formatNumber(value_1 - value_0);
-    }
     tooltip.select(".tooltip-outer-group-label").text(d.parentKey);
     tooltip.select(".tooltip-inner-group-label").text(d.key);
     tooltip.select(".tooltip-inner-group-value").text(value);
@@ -617,18 +496,6 @@ function stackedBarChartViz(option) {
     .data(colorScale_0.domain())
     .join("div")
     .attr("class", "legend-item")
-    .call((item) =>
-      item
-        .append("div")
-        .attr("class", (d) =>
-          paletteFill === "pattern"
-            ? `${colorScale_0(d)} pattern-fill-0 legend-swatch`
-            : "legend-swatch"
-        )
-        .style("background", (d) =>
-          paletteFill === "pattern" ? null : colorScale_0(d)
-        )
-    )
     .call((item) =>
       item
         .append("div")
